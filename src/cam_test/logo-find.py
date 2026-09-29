@@ -1,5 +1,21 @@
 import cv2
 import numpy as np
+from pathlib import Path
+
+
+# ============================================================
+# PATHS
+# ============================================================
+
+# logo-find.py
+#     ↓ parents[0] = cam_test
+#     ↓ parents[1] = src
+#     ↓ parents[2] = cam-test project root
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+LOGO_PATH = PROJECT_ROOT / "assets" / "logo.png"
+CALIBRATION_PATH = PROJECT_ROOT / "camera_calibration.npz"
 
 
 # ============================================================
@@ -8,37 +24,56 @@ import numpy as np
 
 CAMERA_ID = 0
 
-from pathlib import Path
-
-# Project root:
-# cam-test/
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-LOGO_PATH = PROJECT_ROOT / "assets" / "logo.png"
-CALIBRATION_PATH = PROJECT_ROOT / "camera_calibration.npz"
-
-# 9 x 6 squares -> 8 x 5 internal corners
+# 9 x 6 checkerboard squares
+# therefore 8 x 5 internal corners
 BOARD_SIZE = (8, 5)
 
-SQUARE_SIZE_MM = 4.0
+# Your checkerboard square size
+SQUARE_SIZE_MM = 40.0
 
-# Minimum number of good ORB matches
-MIN_MATCHES = 8
+# ORB
+MIN_MATCHES = 4
 
-# RANSAC reprojection threshold for logo homography
-RANSAC_THRESHOLD = 5.0
+# RANSAC
+RANSAC_THRESHOLD = 2.0
+
+
+# ============================================================
+# CHECK FILES
+# ============================================================
+
+if not LOGO_PATH.exists():
+    raise FileNotFoundError(
+        f"Logo not found:\n{LOGO_PATH}"
+    )
+
+if not CALIBRATION_PATH.exists():
+    raise FileNotFoundError(
+        f"Calibration not found:\n{CALIBRATION_PATH}"
+    )
+
+
+print("=" * 60)
+print("LOGO POSITION TEST")
+print("=" * 60)
+
+print(f"Project root: {PROJECT_ROOT}")
+print(f"Logo:         {LOGO_PATH}")
+print(f"Calibration:  {CALIBRATION_PATH}")
 
 
 # ============================================================
 # LOAD CAMERA CALIBRATION
 # ============================================================
 
-calibration = np.load(CALIBRATION_PATH)
+calibration = np.load(
+    str(CALIBRATION_PATH)
+)
 
 camera_matrix = calibration["camera_matrix"]
 distortion = calibration["distortion"]
 
-print("Camera matrix:")
+print("\nCamera matrix:")
 print(camera_matrix)
 
 print("\nDistortion:")
@@ -50,21 +85,20 @@ print(distortion)
 # ============================================================
 
 logo = cv2.imread(
-    LOGO_PATH,
+    str(LOGO_PATH),
     cv2.IMREAD_GRAYSCALE
 )
 
 if logo is None:
     raise RuntimeError(
-        f"Could not load logo: {LOGO_PATH}"
+        f"Could not load logo:\n{LOGO_PATH}"
     )
 
-logo_h, logo_w = logo.shape
+logo_height, logo_width = logo.shape
 
-print()
-print("Logo:")
-print(f"Width  : {logo_w}")
-print(f"Height : {logo_h}")
+print("\nLogo:")
+print(f"Width  : {logo_width}px")
+print(f"Height : {logo_height}px")
 
 
 # ============================================================
@@ -81,48 +115,39 @@ orb = cv2.ORB_create(
 
 
 # ============================================================
-# FIND FEATURES IN LOGO
+# FIND FEATURES IN REFERENCE LOGO
 # ============================================================
 
-logo_keypoints, logo_descriptors = orb.detectAndCompute(
-    logo,
-    None
+logo_keypoints, logo_descriptors = (
+    orb.detectAndCompute(
+        logo,
+        None
+    )
 )
 
 if logo_descriptors is None:
     raise RuntimeError(
-        "Could not find features in logo image."
+        "Could not find ORB features in logo."
     )
 
 print(
-    f"Logo features: {len(logo_keypoints)}"
+    f"\nLogo features: {len(logo_keypoints)}"
 )
 
 
 # ============================================================
-# CAMERA
-# ============================================================
-
-cap = cv2.VideoCapture(CAMERA_ID)
-
-if not cap.isOpened():
-    raise RuntimeError(
-        "Could not open camera"
-    )
-
-cap.set(
-    cv2.CAP_PROP_FRAME_WIDTH,
-    1280
-)
-
-cap.set(
-    cv2.CAP_PROP_FRAME_HEIGHT,
-    720
-)
-
-
-# ============================================================
-# CHECKERBOARD 3D POINTS
+# CHECKERBOARD 3D COORDINATES
+#
+# Origin:
+#
+#             Y
+#             ↑
+#             |
+#             |
+#             O ─────────→ X
+#
+# Z = 0 is the checkerboard plane
+#
 # ============================================================
 
 board_points = np.zeros(
@@ -142,6 +167,30 @@ board_points *= SQUARE_SIZE_MM
 
 
 # ============================================================
+# CAMERA
+# ============================================================
+
+cap = cv2.VideoCapture(
+    CAMERA_ID
+)
+
+if not cap.isOpened():
+    raise RuntimeError(
+        "Could not open camera."
+    )
+
+cap.set(
+    cv2.CAP_PROP_FRAME_WIDTH,
+    1280
+)
+
+cap.set(
+    cv2.CAP_PROP_FRAME_HEIGHT,
+    720
+)
+
+
+# ============================================================
 # MATCHER
 # ============================================================
 
@@ -152,9 +201,15 @@ matcher = cv2.BFMatcher(
 
 
 # ============================================================
-# PIXEL -> WORLD
+# PIXEL -> WORLD COORDINATE
 #
-# Assumes the logo lies on Z = 0 plane.
+# Input:
+#     pixel = (u, v)
+#
+# Output:
+#     X, Y, Z in checkerboard coordinate system
+#
+# Assumes pixel belongs to the Z = 0 plane.
 # ============================================================
 
 def pixel_to_world(
@@ -164,16 +219,18 @@ def pixel_to_world(
 ):
 
     # --------------------------------------------------------
-    # Camera rotation
+    # Rotation matrix
     # --------------------------------------------------------
 
-    R, _ = cv2.Rodrigues(rvec)
+    R, _ = cv2.Rodrigues(
+        rvec
+    )
 
     # --------------------------------------------------------
     # Undistort pixel
     # --------------------------------------------------------
 
-    point = np.array(
+    pixel_array = np.array(
         [[[
             float(pixel[0]),
             float(pixel[1])
@@ -182,22 +239,31 @@ def pixel_to_world(
     )
 
     undistorted = cv2.undistortPoints(
-        point,
+        pixel_array,
         camera_matrix,
         distortion
     )
 
-    x = undistorted[0, 0, 0]
-    y = undistorted[0, 0, 1]
+    x = float(
+        undistorted[0, 0, 0]
+    )
+
+    y = float(
+        undistorted[0, 0, 1]
+    )
 
     # Ray in camera coordinates
     ray_camera = np.array(
-        [x, y, 1.0],
+        [
+            x,
+            y,
+            1.0
+        ],
         dtype=np.float64
     )
 
     # --------------------------------------------------------
-    # Camera -> world
+    # Camera position in world coordinates
     # --------------------------------------------------------
 
     R_inv = R.T
@@ -206,7 +272,13 @@ def pixel_to_world(
         -R_inv @ tvec.reshape(3)
     )
 
-    ray_world = R_inv @ ray_camera
+    # --------------------------------------------------------
+    # Ray direction in world coordinates
+    # --------------------------------------------------------
+
+    ray_world = (
+        R_inv @ ray_camera
+    )
 
     # --------------------------------------------------------
     # Intersect ray with Z = 0
@@ -237,7 +309,7 @@ while True:
     ret, frame = cap.read()
 
     if not ret:
-        print("Camera read failed")
+        print("\nCamera read failed.")
         break
 
     display = frame.copy()
@@ -264,7 +336,7 @@ while True:
     if board_found:
 
         # ----------------------------------------------------
-        # Estimate board pose
+        # Estimate checkerboard pose
         # ----------------------------------------------------
 
         success, rvec, tvec = cv2.solvePnP(
@@ -277,6 +349,10 @@ while True:
 
         if success:
 
+            # ------------------------------------------------
+            # Draw checkerboard
+            # ------------------------------------------------
+
             cv2.drawChessboardCorners(
                 display,
                 BOARD_SIZE,
@@ -284,18 +360,21 @@ while True:
                 board_found
             )
 
-            # ------------------------------------------------
-            # Draw coordinate axes
-            # ------------------------------------------------
+            # =================================================
+            # DRAW WORLD AXES
+            # =================================================
 
             axis_length = 40.0
 
-            axis_points = np.float32([
-                [0, 0, 0],
-                [axis_length, 0, 0],
-                [0, axis_length, 0],
-                [0, 0, -axis_length]
-            ])
+            axis_points = np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [axis_length, 0.0, 0.0],
+                    [0.0, axis_length, 0.0],
+                    [0.0, 0.0, -axis_length]
+                ],
+                dtype=np.float32
+            )
 
             projected, _ = cv2.projectPoints(
                 axis_points,
@@ -305,25 +384,41 @@ while True:
                 distortion
             )
 
-            projected = projected.reshape(-1, 2)
-
-            origin = tuple(
-                projected[0].astype(int)
+            projected = projected.reshape(
+                -1,
+                2
             )
 
-            x_axis = tuple(
-                projected[1].astype(int)
+            # ------------------------------------------------
+            # IMPORTANT:
+            # Convert numpy floats to Python ints.
+            # This fixes cv2.line() error.
+            # ------------------------------------------------
+
+            origin = (
+                int(round(projected[0][0])),
+                int(round(projected[0][1]))
             )
 
-            y_axis = tuple(
-                projected[2].astype(int)
+            x_axis = (
+                int(round(projected[1][0])),
+                int(round(projected[1][1]))
             )
 
-            z_axis = tuple(
-                projected[3].astype(int)
+            y_axis = (
+                int(round(projected[2][0])),
+                int(round(projected[2][1]))
             )
 
-            # X
+            z_axis = (
+                int(round(projected[3][0])),
+                int(round(projected[3][1]))
+            )
+
+            # ------------------------------------------------
+            # X axis - red
+            # ------------------------------------------------
+
             cv2.line(
                 display,
                 origin,
@@ -332,7 +427,10 @@ while True:
                 3
             )
 
-            # Y
+            # ------------------------------------------------
+            # Y axis - green
+            # ------------------------------------------------
+
             cv2.line(
                 display,
                 origin,
@@ -341,7 +439,10 @@ while True:
                 3
             )
 
-            # Z
+            # ------------------------------------------------
+            # Z axis - blue
+            # ------------------------------------------------
+
             cv2.line(
                 display,
                 origin,
@@ -349,6 +450,10 @@ while True:
                 (255, 0, 0),
                 3
             )
+
+            # ------------------------------------------------
+            # Origin
+            # ------------------------------------------------
 
             cv2.circle(
                 display,
@@ -372,10 +477,10 @@ while True:
             )
 
     # ========================================================
-    # 2. FIND LOGO
+    # 2. FIND LOGO FEATURES IN CAMERA IMAGE
     # ========================================================
 
-    logo_keypoints_scene, logo_descriptors_scene = (
+    scene_keypoints, scene_descriptors = (
         orb.detectAndCompute(
             gray,
             None
@@ -385,9 +490,12 @@ while True:
     logo_detected = False
     logo_center_pixel = None
 
+    good_matches = []
+    number_inliers = 0
+
     if (
-        logo_descriptors_scene is not None
-        and len(logo_descriptors_scene) > 0
+        scene_descriptors is not None
+        and len(scene_descriptors) > 0
     ):
 
         # ----------------------------------------------------
@@ -396,15 +504,13 @@ while True:
 
         matches = matcher.knnMatch(
             logo_descriptors,
-            logo_descriptors_scene,
+            scene_descriptors,
             k=2
         )
 
         # ----------------------------------------------------
         # Lowe ratio test
         # ----------------------------------------------------
-
-        good_matches = []
 
         for pair in matches:
 
@@ -417,24 +523,36 @@ while True:
                 good_matches.append(m)
 
         # ----------------------------------------------------
-        # Need enough matches
+        # Homography
         # ----------------------------------------------------
 
         if len(good_matches) >= MIN_MATCHES:
 
-            src_points = np.float32([
-                logo_keypoints[m.queryIdx].pt
-                for m in good_matches
-            ]).reshape(-1, 1, 2)
+            src_points = np.float32(
+                [
+                    logo_keypoints[
+                        m.queryIdx
+                    ].pt
+                    for m in good_matches
+                ]
+            ).reshape(
+                -1,
+                1,
+                2
+            )
 
-            dst_points = np.float32([
-                logo_keypoints_scene[m.trainIdx].pt
-                for m in good_matches
-            ]).reshape(-1, 1, 2)
-
-            # ------------------------------------------------
-            # Find logo -> camera homography
-            # ------------------------------------------------
+            dst_points = np.float32(
+                [
+                    scene_keypoints[
+                        m.trainIdx
+                    ].pt
+                    for m in good_matches
+                ]
+            ).reshape(
+                -1,
+                1,
+                2
+            )
 
             H, mask = cv2.findHomography(
                 src_points,
@@ -443,82 +561,98 @@ while True:
                 RANSAC_THRESHOLD
             )
 
-            if H is not None and mask is not None:
+            if (
+                H is not None
+                and mask is not None
+            ):
 
-                inliers = mask.ravel().astype(bool)
+                inlier_mask = (
+                    mask.ravel().astype(bool)
+                )
 
-                number_inliers = np.sum(inliers)
+                number_inliers = int(
+                    np.sum(inlier_mask)
+                )
 
-                # Require a reasonable number of inliers
+                # ------------------------------------------------
+                # Require enough geometrically consistent matches
+                # ------------------------------------------------
+
                 if number_inliers >= 6:
 
-                    # ------------------------------------------------
-                    # Four corners of reference logo
-                    # ------------------------------------------------
+                    # ============================================
+                    # LOGO CORNERS
+                    # ============================================
 
-                    logo_corners = np.float32([
-                        [0, 0],
-                        [logo_w - 1, 0],
-                        [logo_w - 1, logo_h - 1],
-                        [0, logo_h - 1]
-                    ]).reshape(-1, 1, 2)
-
-                    scene_corners = cv2.perspectiveTransform(
-                        logo_corners,
-                        H
-                    )
-
-                    # ------------------------------------------------
-                    # Draw detected logo boundary
-                    # ------------------------------------------------
-
-                    scene_corners_int = np.int32(
-                        scene_corners
-                    )
-
-                    cv2.polylines(
-                        display,
-                        [scene_corners_int],
-                        True,
-                        (0, 255, 0),
-                        3
-                    )
-
-                    # ------------------------------------------------
-                    # Find center of logo
-                    # ------------------------------------------------
-
-                    center = np.float32([
+                    logo_corners = np.float32(
                         [
-                            [logo_w / 2.0],
-                            [logo_h / 2.0]
+                            [0, 0],
+                            [logo_width - 1, 0],
+                            [logo_width - 1, logo_height - 1],
+                            [0, logo_height - 1]
                         ]
-                    ])
-
-                    # Reshape correctly
-                    center = np.array(
-                        [
-                            [
-                                logo_w / 2.0,
-                                logo_h / 2.0
-                            ]
-                        ],
-                        dtype=np.float32
                     ).reshape(
                         -1,
                         1,
                         2
                     )
 
-                    transformed_center = (
+                    scene_corners = (
                         cv2.perspectiveTransform(
-                            center,
+                            logo_corners,
                             H
                         )
                     )
 
-                    cx, cy = (
-                        transformed_center[0, 0]
+                    scene_corners_int = (
+                        np.round(
+                            scene_corners
+                        ).astype(
+                            np.int32
+                        )
+                    )
+
+                    # ------------------------------------------------
+                    # Draw logo boundary
+                    # ------------------------------------------------
+
+                    cv2.polylines(
+                        display,
+                        [
+                            scene_corners_int
+                        ],
+                        True,
+                        (0, 255, 0),
+                        3
+                    )
+
+                    # ============================================
+                    # LOGO CENTER
+                    # ============================================
+
+                    logo_center = np.array(
+                        [
+                            [
+                                [logo_width / 2.0,
+                                 logo_height / 2.0]
+                            ]
+                        ],
+                        dtype=np.float32
+                    )
+
+                    transformed_center = (
+                        cv2.perspectiveTransform(
+                            logo_center,
+                            H
+                        )
+                    )
+
+                    cx = float(
+                        transformed_center[0, 0, 0]
+                    )
+
+                    cy = float(
+                        transformed_center[0, 0, 1]
                     )
 
                     logo_center_pixel = (
@@ -529,7 +663,7 @@ while True:
                     logo_detected = True
 
                     # ------------------------------------------------
-                    # Draw center
+                    # Draw logo center
                     # ------------------------------------------------
 
                     cv2.circle(
@@ -540,34 +674,8 @@ while True:
                         -1
                     )
 
-                    # ------------------------------------------------
-                    # Display matching information
-                    # ------------------------------------------------
-
-                    cv2.putText(
-                        display,
-                        f"Logo matches: "
-                        f"{len(good_matches)}",
-                        (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.65,
-                        (255, 255, 255),
-                        2
-                    )
-
-                    cv2.putText(
-                        display,
-                        f"Logo inliers: "
-                        f"{number_inliers}",
-                        (20, 70),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.65,
-                        (255, 255, 255),
-                        2
-                    )
-
     # ========================================================
-    # 3. LOGO PIXEL -> BOARD COORDINATES
+    # 3. CONVERT LOGO CENTER TO BOARD COORDINATES
     # ========================================================
 
     if (
@@ -584,11 +692,12 @@ while True:
 
         if world is not None:
 
-            X = world[0]
-            Y = world[1]
+            X = float(world[0])
+            Y = float(world[1])
+            Z = float(world[2])
 
             # ------------------------------------------------
-            # Distance from origin
+            # Distance from checkerboard origin
             # ------------------------------------------------
 
             distance = np.sqrt(
@@ -596,9 +705,9 @@ while True:
                 Y * Y
             )
 
-            # ------------------------------------------------
-            # Display coordinates
-            # ------------------------------------------------
+            # =================================================
+            # DISPLAY
+            # =================================================
 
             cv2.putText(
                 display,
@@ -622,7 +731,7 @@ while True:
 
             cv2.putText(
                 display,
-                f"Distance = {distance:.2f} mm",
+                f"Z = {Z:.2f} mm",
                 (20, 185),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.75,
@@ -630,17 +739,31 @@ while True:
                 2
             )
 
+            cv2.putText(
+                display,
+                f"Distance = {distance:.2f} mm",
+                (20, 220),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.75,
+                (0, 255, 255),
+                2
+            )
+
             # ------------------------------------------------
-            # Console output
+            # Console
             # ------------------------------------------------
 
             print(
                 f"\r"
-                f"Logo: "
-                f"X={X:8.2f} mm   "
-                f"Y={Y:8.2f} mm   "
-                f"Distance={distance:8.2f} mm",
-                end=""
+                f"LOGO FOUND | "
+                f"X={X:8.2f} mm | "
+                f"Y={Y:8.2f} mm | "
+                f"Z={Z:8.2f} mm | "
+                f"D={distance:8.2f} mm | "
+                f"matches={len(good_matches)} | "
+                f"inliers={number_inliers}",
+                end="",
+                flush=True
             )
 
     # ========================================================
@@ -652,7 +775,7 @@ while True:
         cv2.putText(
             display,
             "CHECKERBOARD NOT FOUND",
-            (20, 220),
+            (20, 260),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
             (0, 0, 255),
@@ -664,7 +787,7 @@ while True:
         cv2.putText(
             display,
             "LOGO NOT FOUND",
-            (20, 220),
+            (20, 260),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
             (0, 0, 255),
@@ -676,15 +799,32 @@ while True:
         cv2.putText(
             display,
             "LOGO FOUND",
-            (20, 220),
+            (20, 260),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
             (0, 255, 0),
             2
         )
 
+    # --------------------------------------------------------
+    # Controls
+    # --------------------------------------------------------
+
+    cv2.putText(
+        display,
+        "ESC = exit",
+        (
+            20,
+            display.shape[0] - 20
+        ),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2
+    )
+
     # ========================================================
-    # DISPLAY
+    # SHOW
     # ========================================================
 
     cv2.imshow(
@@ -704,3 +844,8 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+
+print("\n")
+print("=" * 60)
+print("EXIT")
+print("=" * 60)
