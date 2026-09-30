@@ -8,9 +8,11 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "opencv-contrib-python>=5.0.0.93",
     "opencv-python>=5.0.0.93",
     "pyrealsense2>=2.58.4.10922",
     "pytesseract>=0.3.13",
+    "ultralytics>=8.4.166",
 ]
 
 [project.scripts]
