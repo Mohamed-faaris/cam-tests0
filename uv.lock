@@ -29,6 +29,7 @@ dependencies = [
     { name = "opencv-python" },
     { name = "pyrealsense2" },
     { name = "pytesseract" },
+    { name = "tkinterdnd2" },
     { name = "ultralytics" },
 ]
 
@@ -38,6 +39,7 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=5.0.0.93" },
     { name = "pyrealsense2", specifier = ">=2.58.4.10922" },
     { name = "pytesseract", specifier = ">=0.3.13" },
+    { name = "tkinterdnd2", specifier = ">=0.6.3" },
     { name = "ultralytics", specifier = ">=8.4.166" },
 ]
 
@@ -1284,6 +1286,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
+]
+
+[[package]]
+name = "tkinterdnd2"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/e7/50713531e91cbbd546a72f3044742fa43914bdebab3e012cccb28da5eb8a/tkinterdnd2-0.6.3.tar.gz", hash = "sha256:53ed472ec08705702e087b5664f0534ca53a07a67102255f9cdc82bc5094158b", size = 735139, upload-time = "2026-09-04T16:36:38.159Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/86/fb62a6251863085d9e4ccf80cd0e55a19b91fab752a0b245d59aecade8f8/tkinterdnd2-0.6.3-py3-none-any.whl", hash = "sha256:50c7386302104bfb30d8e15b4cc53c0581bc51a28186ff4d7ad3cb2cc820c936", size = 816576, upload-time = "2026-09-04T16:36:36.456Z" },
 ]
 
 [[package]]

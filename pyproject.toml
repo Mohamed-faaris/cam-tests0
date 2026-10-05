@@ -12,6 +12,7 @@ dependencies = [
     "opencv-python>=5.0.0.93",
     "pyrealsense2>=2.58.4.10922",
     "pytesseract>=0.3.13",
+    "tkinterdnd2>=0.6.3",
     "ultralytics>=8.4.166",
 ]
 
