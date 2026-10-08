@@ -8,8 +8,10 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "dbus-next>=0.2.3",
     "opencv-contrib-python>=5.0.0.93",
     "opencv-python>=5.0.0.93",
+    "pillow>=12.3.0",
     "pyrealsense2>=2.58.4.10922",
     "pytesseract>=0.3.13",
     "tkinterdnd2>=0.6.3",
