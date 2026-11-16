@@ -1,0 +1,13 @@
+# Ultralytics Package-Seg dataset.
+# Source: https://docs.ultralytics.com/datasets/segment/package-seg
+# Downloaded automatically on first training run (~103 MB).
+
+path: datasets/package-seg
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: package
+
+download: https://github.com/ultralytics/assets/releases/download/v0.0.0/package-seg.zip
