@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 cam-test = "cam_test:main"
+cam-test-segment = "cam_test.package_seg:main"
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]
