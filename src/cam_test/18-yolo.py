@@ -12,7 +12,7 @@ import numpy as np
 # CONFIGURATION
 # ============================================================
 
-MODEL_PATH = "yolo26s.pt"
+MODEL_PATH = "yolo26n.pt"
 
 # Minimum confidence
 CONFIDENCE = 0.25

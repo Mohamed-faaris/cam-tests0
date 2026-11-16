@@ -55,7 +55,7 @@ image_points = []
 # CAMERA
 # ============================================================
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
 
 if not cap.isOpened():
     raise RuntimeError("Could not open camera")
